@@ -1,0 +1,48 @@
+{
+  "name": "omg-ai",
+  "version": "1.0.0",
+  "description": "OMG-AI: The agent harness that fixes THE harness problem + self-evolving skills. Consolidating ECC, oh-my-openagent, oh-my-claudecode, and 1ai-skills.",
+  "main": "index.js",
+  "bin": {
+    "omg-ai": "./bin/omg-ai.js"
+  },
+  "scripts": {
+    "install": "node scripts/install.js",
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "harness",
+    "claude-code",
+    "opencode",
+    "codex",
+    "cursor",
+    "llm",
+    "automation",
+    "skills"
+  ],
+  "author": "oyi77",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oyi77/omg-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oyi77/omg-ai/issues"
+  },
+  "homepage": "https://github.com/oyi77/omg-ai#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "skills",
+    "operators",
+    "meta",
+    "README.md",
+    "ARCHITECTURE.md",
+    "LICENSE"
+  ]
+}
