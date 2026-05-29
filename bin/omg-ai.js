@@ -1,17 +1,11 @@
 #!/usr/bin/env node
 
-/**
- * OMG-AI Installer
- * 
- * The agent harness that fixes THE harness problem.
- * 
- * Usage: npx omg-ai install
- */
+'use strict';
 
-const { execSync, spawn } = require('child_process');
-const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const editTool = require('../src/edit-tool');
+const skillMerger = require('../src/skill-merger');
+const harnessAdapter = require('../src/harness-adapter');
 
 const COLORS = {
   reset: '\x1b[0m',
@@ -24,153 +18,240 @@ const COLORS = {
   cyan: '\x1b[36m',
 };
 
-function log(message, color = 'reset') {
-  console.log(`${COLORS[color]}${message}${COLORS.reset}`);
+function log(msg, color = 'reset') {
+  console.log(`${COLORS[color] || ''}${msg}${COLORS.reset}`);
 }
 
-function detectHarnes() {
-  const homeDir = os.homedir();
-  const cwd = process.cwd();
-  
-  // Check for Claude Code
-  if (fs.existsSync(path.join(homeDir, '.claude'))) {
-    return 'claude-code';
+function usage() {
+  log('');
+  log('OMG-AI: Hash-anchored edits + skill merging + multi-harness', 'cyan');
+  log('');
+  log('Commands:', 'bright');
+  log('  edit <file> <old> <new>    Hash-anchored edit');
+  log('  edit --dry-run <f> <o> <n> Preview edit without writing');
+  log('  verify <file> <hash>       Verify anchor hash');
+  log('  skills merge [paths...]     Merge skill sources');
+  log('  skills list [paths...]      List available skills');
+  log('  install [harness]           Install for detected/specified harness');
+  log('  uninstall [harness]         Remove hooks');
+  log('  status                      Show installed harnesses and skill count');
+  log('');
+  log('Examples:', 'dim');
+  log('  omg-ai edit src/app.js "old code" "new code"');
+  log('  omg-ai verify src/app.js');
+  log('  omg-ai skills merge /path/to/skills-a /path/to/skills-b');
+  log('  omg-ai install claude-code');
+  log('  omg-ai status');
+  log('');
+}
+
+function cmdEdit(args) {
+  let dryRun = false;
+  const filtered = [];
+  for (const arg of args) {
+    if (arg === '--dry-run') {
+      dryRun = true;
+    } else {
+      filtered.push(arg);
+    }
   }
-  
-  // Check for OpenCode
-  if (fs.existsSync(path.join(homeDir, '.opencode'))) {
-    return 'opencode';
+
+  if (filtered.length < 3) {
+    log('Usage: omg-ai edit [--dry-run] <file> <oldString> <newString>', 'red');
+    process.exit(1);
   }
-  
-  // Check for Codex
-  if (fs.existsSync(path.join(homeDir, '.codex'))) {
-    return 'codex';
+
+  const [file, oldStr, newStr] = filtered;
+  const result = editTool.anchorEdit(file, oldStr, newStr, { dryRun });
+
+  if (result.success) {
+    log(result.message, 'green');
+    log(`  Hash: ${result.anchor.contentHash.slice(0, 16)}...`, 'dim');
+    log(`  Line: ${result.anchor.line}`, 'dim');
+  } else {
+    log(`Error: ${result.message}`, 'red');
+    process.exit(1);
   }
-  
-  // Check for Cursor
-  if (fs.existsSync(path.join(cwd, '.cursor'))) {
-    return 'cursor';
+}
+
+function cmdVerify(args) {
+  if (args.length < 1) {
+    log('Usage: omg-ai verify <file>', 'red');
+    process.exit(1);
   }
-  
-  return 'unknown';
-}
 
-function installForClaudeCode() {
-  log('\n📦 Installing OMG-AI for Claude Code...\n', 'cyan');
-  
-  const homeDir = os.homedir();
-  const claudeDir = path.join(homeDir, '.claude');
-  
-  // Create directories
-  if (!fs.existsSync(claudeDir)) {
-    fs.mkdirSync(claudeDir, { recursive: true });
+  const filePath = args[0];
+  const content = editTool.readFile(filePath);
+
+  if (content === null) {
+    log(`Error: File not found: ${filePath}`, 'red');
+    process.exit(1);
   }
-  
-  // Copy skills
-  log('  ✓ Copying 466 skills...', 'green');
-  // TODO: Implement skill copying
-  
-  // Setup hooks
-  log('  ✓ Setting up hash-anchored edit hooks...', 'green');
-  // TODO: Implement hook setup
-  
-  // Configure settings
-  log('  ✓ Configuring settings...', 'green');
-  // TODO: Implement settings
-  
-  log('\n✅ OMG-AI installed for Claude Code!', 'green');
-  log('  Run: claude', 'yellow');
-  log('  Try: "Use OMG-AI to refactor this code"\n', 'yellow');
+
+  // Verify the whole file: compute and display hash
+  const hash = editTool.computeHash(content);
+  log(`File: ${filePath}`, 'cyan');
+  log(`SHA-256: ${hash}`, 'green');
+  log(`Size: ${content.length} bytes`, 'dim');
+  log(`Lines: ${content.split('\n').length}`, 'dim');
 }
 
-function installForOpenCode() {
-  log('\n📦 Installing OMG-AI for OpenCode...\n', 'cyan');
-  
-  const homeDir = os.homedir();
-  const opencodeDir = path.join(homeDir, '.opencode');
-  
-  // Create directories
-  if (!fs.existsSync(opencodeDir)) {
-    fs.mkdirSync(opencodeDir, { recursive: true });
+function cmdSkills(args) {
+  const sub = args[0] || 'list';
+  const paths = args.slice(1);
+
+  // Default skill source paths
+  const defaultPaths = [
+    path.resolve(__dirname, '..', '..', '1ai-skills'),
+  ];
+
+  const sourcePaths = paths.length > 0 ? paths : defaultPaths.filter(p => {
+    try { return require('fs').existsSync(p); } catch { return false; }
+  });
+
+  if (sourcePaths.length === 0) {
+    log('No skill sources found. Provide paths: omg-ai skills list /path/to/skills', 'yellow');
+    log('Or ensure 1ai-skills is at: ' + defaultPaths[0], 'dim');
+    return;
   }
-  
-  log('  ✓ Copying 466 skills...', 'green');
-  log('  ✓ Setting up hash-anchored edit hooks...', 'green');
-  log('  ✓ Configuring settings...', 'green');
-  
-  log('\n✅ OMG-AI installed for OpenCode!', 'green');
-  log('  Run: opencode', 'yellow');
-  log('  Try: "Use OMG-AI to fix all TypeScript errors"\n', 'yellow');
-}
 
-function installForCodex() {
-  log('\n📦 Installing OMG-AI for Codex...\n', 'cyan');
-  log('  ✓ Copying 466 skills...', 'green');
-  log('  ✓ Setting up hash-anchored edit hooks...', 'green');
-  log('\n✅ OMG-AI installed for Codex!', 'green');
-}
+  const merged = skillMerger.mergeSkills(sourcePaths);
 
-function installForCursor() {
-  log('\n📦 Installing OMG-AI for Cursor...\n', 'cyan');
-  log('  ✓ Copying 466 skills...', 'green');
-  log('  ✓ Setting up hash-anchored edit hooks...', 'green');
-  log('\n✅ OMG-AI installed for Cursor!', 'green');
-}
+  if (sub === 'merge') {
+    log(`Skill merge complete:`, 'green');
+    log(`  Total scanned: ${merged.stats.totalScanned}`, 'dim');
+    log(`  Unique: ${merged.stats.unique}`, 'dim');
+    log(`  Duplicates removed: ${merged.stats.duplicatesRemoved}`, 'dim');
+    for (const src of merged.stats.sources) {
+      log(`  Source: ${src.path} (${src.count} skills)`, 'dim');
+    }
 
-function installForUnknown() {
-  log('\n⚠️  Could not detect your AI harness.', 'yellow');
-  log('\nSupported harnesses:', 'cyan');
-  log('  • Claude Code');
-  log('  • OpenCode');
-  log('  • Codex');
-  log('  • Cursor');
-  log('\nPlease install one of the supported harnesses first.\n', 'yellow');
-  process.exit(1);
-}
-
-async function main() {
-  console.log();
-  log('╔═══════════════════════════════════════════════════════════╗', 'magenta');
-  log('║                                                           ║', 'magenta');
-  log('║   🤯 OMG-AI: Oh My God AI                                 ║', 'magenta');
-  log('║   The agent harness that fixes THE harness problem        ║', 'magenta');
-  log('║                                                           ║', 'magenta');
-  log('╚═══════════════════════════════════════════════════════════╝', 'magenta');
-  console.log();
-  
-  log('🔍 Detecting your AI harness...', 'cyan');
-  
-  const harness = detectHarnes();
-  
-  switch (harness) {
-    case 'claude-code':
-      installForClaudeCode();
-      break;
-    case 'opencode':
-      installForOpenCode();
-      break;
-    case 'codex':
-      installForCodex();
-      break;
-    case 'cursor':
-      installForCursor();
-      break;
-    default:
-      installForUnknown();
+    // Generate and save catalog
+    const catalog = skillMerger.generateCatalog(merged.skills);
+    const catalogPath = path.resolve(__dirname, '..', 'skill-catalog.json');
+    require('fs').writeFileSync(catalogPath, JSON.stringify(catalog, null, 2) + '\n', 'utf8');
+    log(`Catalog written to: ${catalogPath}`, 'blue');
+  } else {
+    // list
+    log(`Skills found: ${merged.stats.unique}`, 'cyan');
+    log('');
+    for (const [cat, skills] of Object.entries(skillMerger.generateCatalog(merged.skills).categories)) {
+      log(`[${cat}]`, 'yellow');
+      for (const s of skills) {
+        log(`  ${s.name}: ${s.description || '(no description)'}`, 'dim');
+      }
+    }
   }
-  
-  log('📋 What\'s installed:', 'cyan');
-  log('  • Hash-anchored edit tool (68.3% vs 6.7% success)');
-  log('  • 466 skills (ECC + 1ai-skills merged)');
-  log('  • Self-evolving meta-skills');
-  log('  • Cross-harness support');
-  console.log();
-  log('🔗 GitHub: https://github.com/oyi77/omg-ai', 'blue');
-  log('📖 Docs: https://github.com/oyi77/omg-ai#readme', 'blue');
-  console.log();
 }
 
-main().catch(err => {
-  log(`\n❌ Error: ${err.message}`, 'red');
-  process.exit(1);
-});
+function cmdInstall(args) {
+  const harness = args[0] || harnessAdapter.detectHarness();
+
+  if (!harness) {
+    log('Could not detect a harness. Specify one:', 'yellow');
+    log('  omg-ai install claude-code|opencode|codex|cursor|gemini-cli', 'dim');
+    process.exit(1);
+  }
+
+  const result = harnessAdapter.installFor(harness);
+  if (result.success) {
+    log(result.message, 'green');
+  } else {
+    log(result.message, 'red');
+    process.exit(1);
+  }
+}
+
+function cmdUninstall(args) {
+  const harness = args[0] || harnessAdapter.detectHarness();
+
+  if (!harness) {
+    log('Could not detect a harness. Specify one:', 'yellow');
+    log('  omg-ai uninstall claude-code|opencode|codex|cursor|gemini-cli', 'dim');
+    process.exit(1);
+  }
+
+  const result = harnessAdapter.uninstall(harness);
+  if (result.success) {
+    log(result.message, 'green');
+  } else {
+    log(result.message, 'red');
+    process.exit(1);
+  }
+}
+
+function cmdStatus() {
+  log('OMG-AI Status', 'cyan');
+  log('');
+
+  // Detected harnesses
+  const detected = harnessAdapter.detectHarnesses();
+  log(`Detected harnesses: ${detected.length > 0 ? detected.join(', ') : 'none'}`, 'dim');
+
+  // Installed integrations
+  const installed = harnessAdapter.listInstalled();
+  if (installed.length > 0) {
+    log('Installed for:', 'green');
+    for (const inst of installed) {
+      log(`  ${inst.name} (v${inst.version}, installed ${inst.installedAt})`, 'dim');
+    }
+  } else {
+    log('No harness integrations installed.', 'yellow');
+  }
+
+  log('');
+
+  // Skill count from default path
+  const skillPath = path.resolve(__dirname, '..', '..', '1ai-skills');
+  const fs = require('fs');
+  if (fs.existsSync(skillPath)) {
+    const merged = skillMerger.mergeSkills([skillPath]);
+    log(`Skills available: ${merged.stats.unique}`, 'green');
+  } else {
+    log('Skills: 1ai-skills not found at expected path', 'yellow');
+  }
+
+  log('');
+  log('Core features:', 'bright');
+  log('  Hash-anchored edits: YES', 'green');
+  log('  Skill merging: YES', 'green');
+  log('  Multi-harness: YES', 'green');
+  log('  Version: ' + require('../package.json').version, 'dim');
+  log('');
+}
+
+// Main
+const args = process.argv.slice(2);
+const command = args[0];
+
+switch (command) {
+  case 'edit':
+    cmdEdit(args.slice(1));
+    break;
+  case 'verify':
+    cmdVerify(args.slice(1));
+    break;
+  case 'skills':
+    cmdSkills(args.slice(1));
+    break;
+  case 'install':
+    cmdInstall(args.slice(1));
+    break;
+  case 'uninstall':
+    cmdUninstall(args.slice(1));
+    break;
+  case 'status':
+    cmdStatus();
+    break;
+  case '--help':
+  case '-h':
+  case 'help':
+    usage();
+    break;
+  default:
+    if (command) {
+      log(`Unknown command: ${command}`, 'red');
+    }
+    usage();
+    process.exit(command ? 1 : 0);
+}
