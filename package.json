@@ -7,7 +7,8 @@
     "omg-ai": "./bin/omg-ai.js"
   },
   "scripts": {
-    "test": "node --test tests/test-edit-tool.js tests/test-skill-merger.js tests/test-harness-adapter.js",
+    "test": "node --test tests/test-edit-tool.js tests/test-skill-merger.js tests/test-harness-adapter.js tests/test-integration.js",
+    "test:coverage": "node --test --experimental-test-coverage tests/test-edit-tool.js tests/test-skill-merger.js tests/test-harness-adapter.js tests/test-integration.js",
     "benchmark": "node scripts/benchmark-edits.js"
   },
   "files": [

@@ -45,7 +45,7 @@ function generateTestFile() {
   return { tmpDir, filePath };
 }
 
-function simulateRaceCondition(filePath, editFn, iterations) {
+function simulateRaceCondition(filePath, editFn, iterations, mode) {
   let successes = 0;
   let failures = 0;
   let corruptions = 0;
@@ -54,29 +54,54 @@ function simulateRaceCondition(filePath, editFn, iterations) {
     const original = fs.readFileSync(filePath, 'utf8');
     const lines = original.split('\n');
     
-    // Pick a random line to edit
     const lineNum = Math.floor(Math.random() * lines.length) + 1;
     const oldContent = lines[lineNum - 1];
     const newContent = `// EDITED ${i}: ${crypto.randomBytes(8).toString('hex')}`;
     
-    // Simulate concurrent modification: modify the file after reading
-    // but before the edit is applied
     const modifiedLines = [...lines];
-    modifiedLines[Math.floor(Math.random() * lines.length)] = `// MODIFIED ${i}: ${crypto.randomBytes(8).toString('hex')}`;
+    const modificationType = Math.random();
+    
+    if (modificationType < 0.4) {
+      const insertPos = lineNum - 1;
+      modifiedLines.splice(insertPos, 0, `// INSERTED ${i}: ${crypto.randomBytes(8).toString('hex')}`);
+    } else if (modificationType < 0.7) {
+      if (lineNum > 1) {
+        const deletePos = lineNum - 2;
+        modifiedLines.splice(deletePos, 1);
+      }
+    } else {
+      modifiedLines[lineNum - 1] = `// MODIFIED ${i}: ${crypto.randomBytes(8).toString('hex')}`;
+    }
+    
     fs.writeFileSync(filePath, modifiedLines.join('\n'), 'utf8');
     
-    // Now try to edit the original line
-    const result = editFn(filePath, oldContent, newContent);
+    let result;
+    if (mode === 'line') {
+      result = editFn(filePath, lineNum, newContent);
+    } else {
+      result = editFn(filePath, oldContent, newContent);
+    }
     
     if (result.success) {
       successes++;
+      if (mode === 'line') {
+        const after = fs.readFileSync(filePath, 'utf8');
+        const afterLines = after.split('\n');
+        const editedLineIndex = afterLines.findIndex(line => line.includes(newContent));
+        if (editedLineIndex !== -1) {
+          let expectedLine = lineNum - 1;
+          if (modificationType < 0.4) {
+            expectedLine = lineNum;
+          } else if (modificationType < 0.7) {
+            expectedLine = lineNum - 2;
+          }
+          if (editedLineIndex !== expectedLine) {
+            corruptions++;
+          }
+        }
+      }
     } else {
       failures++;
-      // Check if file was corrupted (line-based edit would write to wrong line)
-      const after = fs.readFileSync(filePath, 'utf8');
-      if (after.includes(newContent) && !modifiedLines[lineNum - 1].includes(newContent)) {
-        corruptions++;
-      }
     }
   }
   
@@ -99,17 +124,11 @@ function runBenchmark() {
   
   const lineBasedResults = simulateRaceCondition(
     file1,
-    (fp, oldContent, newContent) => {
-      // Simulate line-based edit: find line number from content
-      const content = fs.readFileSync(fp, 'utf8');
-      const lines = content.split('\n');
-      const lineNum = lines.findIndex(line => line === oldContent) + 1;
-      if (lineNum === 0) {
-        return { success: false, message: 'Line not found' };
-      }
+    (fp, lineNum, newContent) => {
       return lineBasedEdit(fp, lineNum, newContent);
     },
-    ITERATIONS
+    ITERATIONS,
+    'line'
   );
   
   console.log(`  Successes: ${lineBasedResults.successes}`);
@@ -127,7 +146,8 @@ function runBenchmark() {
     (fp, oldContent, newContent) => {
       return editTool.anchorEdit(fp, oldContent, newContent, { dryRun: false });
     },
-    ITERATIONS
+    ITERATIONS,
+    'hash'
   );
   
   console.log(`  Successes: ${hashAnchoredResults.successes}`);

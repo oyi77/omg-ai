@@ -35,7 +35,10 @@ function usage() {
   log('  install [harness]           Install for detected/specified harness');
   log('  uninstall [harness]         Remove hooks');
   log('  status                      Show installed harnesses and skill count');
-  log('  setup                       Interactive setup: install harness + OMG-AI hooks');
+  log('  setup [--yes] [--harness <name>] Interactive setup: install harness + OMG-AI hooks');
+  log('  version                     Show version information');
+  log('  doctor                      Check system requirements and harness status');
+  log('  list-installable            Show harnesses that can be installed');
   log('');
   log('Examples:', 'dim');
   log('  omg-ai edit src/app.js "old code" "new code"');
@@ -221,7 +224,105 @@ function cmdStatus() {
   log('');
 }
 
-function cmdSetup() {
+function cmdVersion() {
+  const pkg = require('../package.json');
+  log(`omg-ai v${pkg.version}`, 'cyan');
+  log(`Node.js ${process.version}`, 'dim');
+  log(`Platform ${process.platform} ${process.arch}`, 'dim');
+}
+
+function cmdDoctor() {
+  const pkg = require('../package.json');
+  log('OMG-AI Doctor', 'cyan');
+  log('');
+
+  // System info
+  log('System:', 'bright');
+  log(`  Node.js: ${process.version}`, 'dim');
+  log(`  Platform: ${process.platform} ${process.arch}`, 'dim');
+  log(`  Version: ${pkg.version}`, 'dim');
+  log('');
+
+  // Check Node.js version
+  const nodeVersion = process.version;
+  const major = parseInt(nodeVersion.slice(1).split('.')[0], 10);
+  if (major >= 18) {
+    log('✓ Node.js >= 18', 'green');
+  } else {
+    log('✗ Node.js >= 18 required', 'red');
+  }
+
+  // Detect harnesses
+  const detected = harnessAdapter.detectHarnesses();
+  log('');
+  log('Detected harnesses:', 'bright');
+  if (detected.length === 0) {
+    log('  None found', 'yellow');
+  } else {
+    for (const h of detected) {
+      const config = harnessAdapter.HARNESSES[h];
+      log(`  ✓ ${config.name}`, 'green');
+    }
+  }
+
+  // Check installed OMG-AI hooks
+  const installed = harnessAdapter.listInstalled();
+  log('');
+  log('OMG-AI hooks installed:', 'bright');
+  if (installed.length === 0) {
+    log('  None', 'yellow');
+  } else {
+    for (const inst of installed) {
+      log(`  ✓ ${inst.name} (v${inst.version})`, 'green');
+    }
+  }
+
+  // Check skill catalog
+  const skillPath = path.resolve(__dirname, '..', 'skill-catalog.json');
+  const fs = require('fs');
+  log('');
+  log('Skill catalog:', 'bright');
+  if (fs.existsSync(skillPath)) {
+    try {
+      const catalog = JSON.parse(fs.readFileSync(skillPath, 'utf8'));
+      log(`  ✓ ${catalog.totalSkills} skills available`, 'green');
+    } catch {
+      log('  ✗ Invalid skill-catalog.json', 'red');
+    }
+  } else {
+    log('  ✗ skill-catalog.json not found', 'red');
+  }
+
+  // Check 1ai-skills directory
+  const skillsDir = path.resolve(__dirname, '..', '..', '1ai-skills');
+  log('');
+  log('Skill sources:', 'bright');
+  if (fs.existsSync(skillsDir)) {
+    log('  ✓ 1ai-skills found', 'green');
+  } else {
+    log('  ✗ 1ai-skills not found at ' + skillsDir, 'yellow');
+  }
+
+  log('');
+  log('Run `omg-ai setup` to install a harness if none detected.', 'dim');
+}
+
+function cmdListInstallable() {
+  const installable = harnessAdapter.getInstallableHarnesses();
+  log('Installable harnesses:', 'bright');
+  if (installable.length === 0) {
+    log('  None', 'yellow');
+  } else {
+    for (let i = 0; i < installable.length; i++) {
+      log(`  ${i + 1}. ${installable[i].name}`, 'dim');
+      log(`     ${installable[i].description}`, 'dim');
+    }
+  }
+  log('');
+  log('Use `omg-ai setup` to install one.', 'dim');
+}
+
+function cmdSetup(args = []) {
   const readline = require('readline');
   const rl = readline.createInterface({
     input: process.stdin,
@@ -229,6 +330,21 @@ function cmdSetup() {
   });
 
   const question = (prompt) => new Promise((resolve) => rl.question(prompt, resolve));
+
+  // Parse flags
+  let yes = false;
+  let harness = null;
+  const filteredArgs = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--yes' || args[i] === '-y') {
+      yes = true;
+    } else if (args[i] === '--harness' && i + 1 < args.length) {
+      harness = args[i + 1];
+      i++;
+    } else {
+      filteredArgs.push(args[i]);
+    }
+  }
 
   async function run() {
     log('OMG-AI Setup', 'cyan');
@@ -238,6 +354,33 @@ function cmdSetup() {
     const detected = harnessAdapter.detectHarnesses();
     const installable = harnessAdapter.getInstallableHarnesses();
 
+    if (harness) {
+      // Non-interactive: install specific harness
+      const harnessKey = harness.toLowerCase();
+      const installableHarness = installable.find(h => h.key === harnessKey);
+      if (!installableHarness) {
+        log(`Error: Harness "${harness}" not found in installable list.`, 'red');
+        log('Use `omg-ai list-installable` to see options.', 'dim');
+        rl.close();
+        process.exit(1);
+      }
+
+      const result = harnessAdapter.installHarness(harnessKey);
+      if (result.success) {
+        log(result.message, 'green');
+        const hookResult = harnessAdapter.installFor(harnessKey);
+        if (hookResult.success) {
+          log(hookResult.message, 'green');
+        } else {
+          log(`Warning: Could not install OMG-AI hooks: ${hookResult.message}`, 'yellow');
+        }
+      } else {
+        log(result.message, 'red');
+      }
+      rl.close();
+      return;
+    }
+
     if (detected.length > 0) {
       log('Detected harnesses:', 'green');
       for (const h of detected) {
@@ -245,31 +388,50 @@ function cmdSetup() {
       }
       log('');
 
+      if (yes) {
+        // Auto-select first detected harness for hooks
+        const harnessKey = detected[0];
+        const result = harnessAdapter.installFor(harnessKey);
+        if (result.success) {
+          log(result.message, 'green');
+        } else {
+          log(result.message, 'red');
+        }
+        rl.close();
+        return;
+      }
+
       const action = await question('Do you want to (1) install OMG-AI hooks into an existing harness, or (2) install a new harness? [1/2]: ');
 
       if (action === '2') {
-        await installNewHarness(installable, question);
+        await installNewHarness(installable, question, yes);
       } else {
         await installHooksIntoExisting(detected, question);
       }
     } else {
       log('No harnesses detected.', 'yellow');
       log('');
-      await installNewHarness(installable, question);
+      await installNewHarness(installable, question, yes);
     }
 
     rl.close();
   }
 
-  async function installNewHarness(installable, question) {
+  async function installNewHarness(installable, question, autoConfirm) {
     log('Available harnesses to install:', 'bright');
     for (let i = 0; i < installable.length; i++) {
       log(`  ${i + 1}. ${installable[i].name} - ${installable[i].description}`, 'dim');
     }
     log('');
 
-    const choice = await question('Enter number to install (or 0 to cancel): ');
-    const index = parseInt(choice, 10) - 1;
+    let index;
+    if (autoConfirm) {
+      index = 0; // Auto-select first
+      log(`Auto-selecting: ${installable[0].name}`, 'dim');
+    } else {
+      const choice = await question('Enter number to install (or 0 to cancel): ');
+      index = parseInt(choice, 10) - 1;
+    }
 
     if (index < 0 || index >= installable.length) {
       log('Cancelled.', 'yellow');
@@ -277,11 +439,12 @@ function cmdSetup() {
     }
 
     const harness = installable[index];
-    const confirm = await question(`Install ${harness.name}? This may require sudo/admin privileges. [y/N]: `);
-
-    if (confirm.toLowerCase() !== 'y') {
-      log('Cancelled.', 'yellow');
-      return;
+    if (!autoConfirm) {
+      const confirm = await question(`Install ${harness.name}? This may require sudo/admin privileges. [y/N]: `);
+      if (confirm.toLowerCase() !== 'y') {
+        log('Cancelled.', 'yellow');
+        return;
+      }
     }
 
     const result = harnessAdapter.installHarness(harness.key);
@@ -328,6 +491,7 @@ function cmdSetup() {
 
   run().catch((err) => {
     log(`Setup failed: ${err.message}`, 'red');
+    rl.close();
     process.exit(1);
   });
 }
@@ -356,7 +520,16 @@ switch (command) {
     cmdStatus();
     break;
   case 'setup':
-    cmdSetup();
+    cmdSetup(args.slice(1));
+    break;
+  case 'version':
+    cmdVersion();
+    break;
+  case 'doctor':
+    cmdDoctor();
+    break;
+  case 'list-installable':
+    cmdListInstallable();
     break;
   case '--help':
   case '-h':

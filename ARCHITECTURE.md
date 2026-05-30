@@ -9,9 +9,9 @@
 OMG-AI is a **consolidated agent harness** that merges the best innovations from 4 open-source projects:
 
 1. **ECC** (182K+ stars) - Cross-harness maturity, skills, operators
-2. **oh-my-openagent** - Hash-anchored edits, LSP/AST, Team Mode
+2. **oh-my-openagent** - Hash-anchored edits, LSP/AST
 3. **oh-my-claudecode** - Orchestration, Ultrawork, Deep Interview
-4. **1ai-skills** (220 skills) - Self-evolving meta-skills
+4. **1ai-skills** (1,286 skills) - Self-evolving meta-skills
 
 This document explains how these systems integrate without duplication.
 
@@ -241,7 +241,7 @@ npx omg-ai install
 
 3. **Merge Skills**
    ```javascript
-   // Skills layer - 466 skills
+   // Skills layer - 1,286 skills
    mergeSkillSets(['ECC', '1ai-skills']);
    // De-duplicate by skill ID
    // Resolve references
@@ -306,10 +306,10 @@ npx omg-ai install
 
 | Aspect | ECC | OMG-AI |
 |--------|-----|--------|
-| Skills | 246 | 466 (ECC + 1ai) |
+| Skills | 246 | 1,286 (ECC + 1ai) |
 | Self-evolution | No | Yes (meta-skills) |
 | Hash-anchored edits | No | Yes |
-| Team Mode | No | Yes |
+| Team Mode | No | No (planned) |
 
 **OMG-AI = ECC + more skills + self-evolution + hash edits**
 
@@ -339,7 +339,7 @@ npx omg-ai install
 
 | Aspect | 1ai-skills | OMG-AI |
 |--------|-----------|--------|
-| Skills | 220 | 466 (merged) |
+| Skills | 220 | 1,286 (merged) |
 | Harness runtime | No | Yes |
 | Hash-anchored edits | No | Yes |
 | Operators | No | Yes |
