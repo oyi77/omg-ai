@@ -8,7 +8,7 @@ Hash-anchored edits, skill merging, and multi-harness support for AI coding agen
 
 **Skill Merging** -- Scans skill definitions (SKILL.md files) from multiple source directories, deduplicates by normalized name, and produces a unified catalog.
 
-**Multi-Harness Adapter** -- Detects and installs into Claude Code, OpenCode, Codex, Cursor, and Gemini CLI. One command to set up, one to remove.
+**Multi-Harness Adapter** -- Detects and installs into Claude Code, OpenCode, Codex, Cursor, Gemini CLI, Pi.dev, and OMP. One command to set up, one to remove.
 
 ## Installation
 
@@ -22,6 +22,8 @@ Or install for a specific harness:
 npx omg-ai install claude-code
 npx omg-ai install opencode
 npx omg-ai install cursor
+npx omg-ai install pi-dev
+npx omg-ai install omp
 ```
 
 ## Commands
@@ -87,6 +89,45 @@ OMG-AI computes SHA-256 of the content to be replaced before applying the edit:
 4. Verify the hash of the replaced region differs from the pre-edit hash
 
 If `oldString` is not found or appears multiple times, the edit is refused. This eliminates stale-line errors.
+
+## Harness-Specific Quirks
+
+Each harness has different configuration locations and settings formats:
+
+### Claude Code
+- **Config location**: `~/.claude/settings.json`
+- **Hooks key**: `hooks`
+- **Notes**: Project-level settings override global settings
+
+### OpenCode
+- **Config location**: `~/.opencode/config.json`
+- **Hooks key**: `hooks`
+- **Notes**: Uses JSON configuration format
+
+### Codex
+- **Config location**: `~/.codex/config.json`
+- **Hooks key**: `hooks`
+- **Notes**: Similar to OpenCode configuration
+
+### Cursor
+- **Config location**: `.cursor/settings.json` (project-local)
+- **Hooks key**: `hooks`
+- **Notes**: Settings are per-project, not global
+
+### Gemini CLI
+- **Config location**: `~/.gemini/settings.json`
+- **Hooks key**: `extensions`
+- **Notes**: Uses `extensions` key instead of `hooks`
+
+### Pi.dev
+- **Config location**: `~/.pi/agent/settings.json`
+- **Hooks key**: `hooks`
+- **Notes**: Global config in `~/.pi/agent/` directory
+
+### OMP
+- **Config location**: `.omp/settings.json` (project-local)
+- **Hooks key**: `hooks`
+- **Notes**: Project-level configuration, similar to Cursor
 
 ## Architecture
 

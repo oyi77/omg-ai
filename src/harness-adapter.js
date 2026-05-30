@@ -40,6 +40,20 @@ const HARNESSES = {
     hooksKey: 'extensions',
     installDir: () => path.join(os.homedir(), '.gemini'),
   },
+  'pi-dev': {
+    name: 'Pi.dev',
+    detectDir: () => path.join(os.homedir(), '.pi'),
+    settingsFile: 'settings.json',
+    hooksKey: 'hooks',
+    installDir: () => path.join(os.homedir(), '.pi/agent'),
+  },
+  omp: {
+    name: 'OMP',
+    detectDir: () => path.join(process.cwd(), '.omp'),
+    settingsFile: 'settings.json',
+    hooksKey: 'hooks',
+    installDir: () => path.join(process.cwd(), '.omp'),
+  },
 };
 
 /**

@@ -83,3 +83,18 @@ describe('installFor / uninstall / listInstalled', () => {
     assert.ok(Array.isArray(result));
   });
 });
+
+describe('pi-dev and omp harnesses', () => {
+  it('pi-dev is a known harness', () => {
+    const result = installFor('pi-dev');
+    // Should not be unknown harness error
+    assert.ok(!result.message.includes('Unknown harness'));
+    // success may be false if directory doesn't exist, that's okay
+    assert.equal(typeof result.success, 'boolean');
+  });
+  it('omp is a known harness', () => {
+    const result = installFor('omp');
+    assert.ok(!result.message.includes('Unknown harness'));
+    assert.equal(typeof result.success, 'boolean');
+  });
+});

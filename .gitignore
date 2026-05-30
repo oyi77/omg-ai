@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Generated files
+skill-catalog.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Build
+dist/
+build/
+
+# Cache
+.cache/
+.omc/
+.omo/
+.omp/
