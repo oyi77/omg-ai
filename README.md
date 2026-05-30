@@ -90,6 +90,31 @@ OMG-AI computes SHA-256 of the content to be replaced before applying the edit:
 
 If `oldString` is not found or appears multiple times, the edit is refused. This eliminates stale-line errors.
 
+## Benchmark
+
+Run the benchmark to compare hash-anchored edits vs traditional line-based edits:
+
+```bash
+npm run benchmark
+```
+
+The benchmark simulates race conditions where files are modified between read and write operations. It measures:
+
+1. **Success rate**: How many edits succeed without corruption
+2. **Corruption detection**: How many edits corrupt the file (wrong line edited)
+3. **Correctness**: Whether edited content appears in the expected location
+
+### Expected Results
+
+Hash-anchored edits should show:
+- **Zero stale-line errors** (edits refused when content changed)
+- **Zero corruptions** (never edits the wrong line)
+- **Higher success rate** in concurrent scenarios
+
+Line-based edits may show:
+- **Corruptions** when files change between read and write
+- **Silent failures** (edit succeeds but corrupts the file)
+
 ## Harness-Specific Quirks
 
 Each harness has different configuration locations and settings formats:
