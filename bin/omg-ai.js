@@ -35,6 +35,7 @@ function usage() {
   log('  install [harness]           Install for detected/specified harness');
   log('  uninstall [harness]         Remove hooks');
   log('  status                      Show installed harnesses and skill count');
+  log('  setup                       Interactive setup: install harness + OMG-AI hooks');
   log('');
   log('Examples:', 'dim');
   log('  omg-ai edit src/app.js "old code" "new code"');
@@ -220,6 +221,117 @@ function cmdStatus() {
   log('');
 }
 
+function cmdSetup() {
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const question = (prompt) => new Promise((resolve) => rl.question(prompt, resolve));
+
+  async function run() {
+    log('OMG-AI Setup', 'cyan');
+    log('');
+
+    // Detect installed harnesses
+    const detected = harnessAdapter.detectHarnesses();
+    const installable = harnessAdapter.getInstallableHarnesses();
+
+    if (detected.length > 0) {
+      log('Detected harnesses:', 'green');
+      for (const h of detected) {
+        log(`  - ${h}`, 'dim');
+      }
+      log('');
+
+      const action = await question('Do you want to (1) install OMG-AI hooks into an existing harness, or (2) install a new harness? [1/2]: ');
+
+      if (action === '2') {
+        await installNewHarness(installable, question);
+      } else {
+        await installHooksIntoExisting(detected, question);
+      }
+    } else {
+      log('No harnesses detected.', 'yellow');
+      log('');
+      await installNewHarness(installable, question);
+    }
+
+    rl.close();
+  }
+
+  async function installNewHarness(installable, question) {
+    log('Available harnesses to install:', 'bright');
+    for (let i = 0; i < installable.length; i++) {
+      log(`  ${i + 1}. ${installable[i].name} - ${installable[i].description}`, 'dim');
+    }
+    log('');
+
+    const choice = await question('Enter number to install (or 0 to cancel): ');
+    const index = parseInt(choice, 10) - 1;
+
+    if (index < 0 || index >= installable.length) {
+      log('Cancelled.', 'yellow');
+      return;
+    }
+
+    const harness = installable[index];
+    const confirm = await question(`Install ${harness.name}? This may require sudo/admin privileges. [y/N]: `);
+
+    if (confirm.toLowerCase() !== 'y') {
+      log('Cancelled.', 'yellow');
+      return;
+    }
+
+    const result = harnessAdapter.installHarness(harness.key);
+    if (result.success) {
+      log(result.message, 'green');
+
+      // Now install OMG-AI hooks into the newly installed harness
+      const hookResult = harnessAdapter.installFor(harness.key);
+      if (hookResult.success) {
+        log(hookResult.message, 'green');
+      } else {
+        log(`Warning: Could not install OMG-AI hooks: ${hookResult.message}`, 'yellow');
+      }
+    } else {
+      log(result.message, 'red');
+    }
+  }
+
+  async function installHooksIntoExisting(detected, question) {
+    log('Select harness to install OMG-AI hooks into:', 'bright');
+    for (let i = 0; i < detected.length; i++) {
+      const config = harnessAdapter.HARNESSES[detected[i]];
+      log(`  ${i + 1}. ${config.name}`, 'dim');
+    }
+    log('');
+
+    const choice = await question('Enter number (or 0 to cancel): ');
+    const index = parseInt(choice, 10) - 1;
+
+    if (index < 0 || index >= detected.length) {
+      log('Cancelled.', 'yellow');
+      return;
+    }
+
+    const harnessKey = detected[index];
+    const result = harnessAdapter.installFor(harnessKey);
+
+    if (result.success) {
+      log(result.message, 'green');
+    } else {
+      log(result.message, 'red');
+    }
+  }
+
+  run().catch((err) => {
+    log(`Setup failed: ${err.message}`, 'red');
+    process.exit(1);
+  });
+}
+
 // Main
 const args = process.argv.slice(2);
 const command = args[0];
@@ -242,6 +354,9 @@ switch (command) {
     break;
   case 'status':
     cmdStatus();
+    break;
+  case 'setup':
+    cmdSetup();
     break;
   case '--help':
   case '-h':

@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { execSync } = require('child_process');
 
 const HARNESSES = {
   'claude-code': {
@@ -55,6 +56,66 @@ const HARNESSES = {
     installDir: () => path.join(process.cwd(), '.omp'),
   },
 };
+
+const INSTALLABLE_HARNESSES = {
+  'claude-code': {
+    name: 'Claude Code',
+    installCommand: 'npm install -g @anthropic-ai/claude-code',
+    description: 'Anthropic\'s official coding agent',
+    requiresConfirmation: true,
+  },
+  opencode: {
+    name: 'OpenCode',
+    installCommand: 'npm install -g opencode-ai',
+    description: 'Terminal-native coding agent',
+    requiresConfirmation: true,
+  },
+  omp: {
+    name: 'OMP',
+    installCommand: 'curl -fsSL https://omp.sh/install | sh',
+    description: 'Oh My Pi - enhanced Pi coding agent',
+    requiresConfirmation: true,
+  },
+  'oh-my-openagent': {
+    name: 'Oh My OpenAgent',
+    installCommand: 'npm install -g oh-my-openagent',
+    description: 'OpenCode with ultrawork, deep interview, etc.',
+    requiresConfirmation: true,
+  },
+};
+
+/**
+ * Get list of harnesses that can be installed programmatically.
+ * @returns {Array<{key: string, name: string, description: string}>}
+ */
+function getInstallableHarnesses() {
+  return Object.entries(INSTALLABLE_HARNESSES).map(([key, config]) => ({
+    key,
+    name: config.name,
+    description: config.description,
+  }));
+}
+
+/**
+ * Install a harness programmatically.
+ * @param {string} harnessKey
+ * @returns {{ success: boolean, message: string }}
+ */
+function installHarness(harnessKey) {
+  const config = INSTALLABLE_HARNESSES[harnessKey];
+  if (!config) {
+    return { success: false, message: `Unknown installable harness: ${harnessKey}` };
+  }
+
+  try {
+    console.log(`Installing ${config.name}...`);
+    console.log(`Running: ${config.installCommand}`);
+    execSync(config.installCommand, { stdio: 'inherit' });
+    return { success: true, message: `${config.name} installed successfully` };
+  } catch (error) {
+    return { success: false, message: `Failed to install ${config.name}: ${error.message}` };
+  }
+}
 
 /**
  * Detect which harnesses are installed.
@@ -264,10 +325,13 @@ function listInstalled() {
 
 module.exports = {
   HARNESSES,
+  INSTALLABLE_HARNESSES,
   detectHarnesses,
   detectHarness,
   readSettings,
   installFor,
   uninstall,
   listInstalled,
+  getInstallableHarnesses,
+  installHarness,
 };

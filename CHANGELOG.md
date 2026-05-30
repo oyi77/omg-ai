@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI workflow for tests and npm publish
 - Benchmark script for hash-anchored vs line-based edits
 - Harness-specific quirks documentation
+- Interactive `setup` command to install harness + OMG-AI hooks
 
 ## [1.0.0] - 2026-05-30
 

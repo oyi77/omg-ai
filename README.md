@@ -26,6 +26,12 @@ npx omg-ai install pi-dev
 npx omg-ai install omp
 ```
 
+**New to AI coding agents?** Use the interactive setup to install a harness and OMG-AI in one go:
+
+```bash
+npx omg-ai setup
+```
+
 ## Commands
 
 ### `omg-ai edit <file> <old> <new>`
